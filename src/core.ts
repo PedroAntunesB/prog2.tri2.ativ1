@@ -12,40 +12,75 @@ db.run(`
 const querySelectItems = db.prepare("SELECT * FROM items");
 const queryInsertItem = db.prepare("INSERT INTO items (title) VALUES (?)");
 const queryDeleteItem = db.prepare("DELETE FROM items WHERE id = (?);");
-const queryUpdateItem = db.prepare("UPDATE items SET title = (?) WHERE id = (?)");
+const queryUpdateItem = db.prepare(
+  "UPDATE items SET title = (?) WHERE id = (?)",
+);
 
 class Item {
-  constructor(public title: string) { }
+  private _id: number;
+  constructor(
+    public title: string,
+    id?: number,
+  ) {
+    if (id) {
+      this._id = id;
+    } else {
+      const item_number = queryInsertItem.run(this.title).lastInsertRowid;
+      this._id = item_number as number;
+    }
+  }
+  updateItem(newTitle: string) {
+    queryUpdateItem.run(newTitle, this._id);
+    this.title = newTitle;
+  }
+
+  deleteItem() {
+    queryDeleteItem.run(this._id);
+    this._id = NaN;
+    this.title = "";
+  }
+
+  getId() {
+    return this._id;
+  }
 }
 
-
 class TodoList {
-  private items: Item[] = []
+  private items: Item[] = querySelectItems
+    .all()
+    .map((i: any) => new Item(i.title, i.id));
+
+  getItems() {
+    return this.items;
+  }
 
   addItem(item: Item) {
     this.items.push(item);
-    queryInsertItem.run(item.title);
   }
 
-  removeItem(id: number) {
-    this.items.splice(id, 2)
-    queryDeleteItem.run(id + 1);
+  removeItems(id: number) {
+    const index = this.items.findIndex((i) => i.getId() === id);
+
+    if (index !== -1) {
+      this.items[index]?.deleteItem();
+      this.items.splice(index, 1);
+    }
   }
 
-  getItems() {
-    const items = querySelectItems.all();
-    return items;
-  }
-
-  updateItems(newTitle: string, id: number) {
-    queryUpdateItem.run(newTitle, id + 1);
+  updateItems(id: number, newTitle: string) {
+    this.items.forEach((i) => {
+      if (i.getId() == id) {
+        i.updateItem(newTitle);
+        i.title = newTitle;
+      }
+    });
   }
 }
 
-const lista = new TodoList()
-lista.addItem(new Item("ficar quieto"));
-lista.addItem(new Item("prestar atenção"));
+const lista = new TodoList();
+lista.addItem(new Item("fazer o 67"));
+lista.addItem(new Item("farmar aura"));
 lista.addItem(new Item("aprender typescript"));
-lista.removeItem(0);
-lista.updateItems("beijar o clayton", 2);
+lista.removeItems(1);
+lista.updateItems(3, "moggar betas");
 console.table(lista.getItems());
